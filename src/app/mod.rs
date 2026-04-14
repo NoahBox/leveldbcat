@@ -3,6 +3,7 @@ use crate::config::{
 };
 use crate::i18n::{I18n, TextKey};
 use crate::reader::{Entry, format_bytes, load_entries};
+use crate::widgets::scrollbars::{ScrollbarAxis, ScrollbarTheme, Scrollbars, WheelScrollMode};
 use crate::widgets::selectable_text::{HighlightMode, JsonHighlightColors, SelectableTextView};
 use crate::widgets::text_input::{
     Backspace, Copy, Delete, End, Home, Left, Paste, Right, SelectAll, TextInputView,
@@ -10,9 +11,9 @@ use crate::widgets::text_input::{
 use csv::WriterBuilder;
 use gpui::{
     AnyElement, App, Application, Bounds, ClipboardItem, Context, DragMoveEvent, Empty, Entity,
-    KeyBinding, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point, Render, SharedString,
-    TitlebarOptions, Window, WindowBounds, WindowOptions, actions, deferred, div, prelude::*, px,
-    rgb, size, uniform_list,
+    KeyBinding, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point, Render, ScrollHandle,
+    SharedString, TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
+    actions, deferred, div, prelude::*, px, rgb, size, uniform_list,
 };
 use rfd::FileDialog;
 use std::collections::{HashMap, HashSet};

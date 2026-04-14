@@ -1,10 +1,12 @@
 use super::{HighlightMode, SelectableTextElement, SelectableTextView};
 use gpui::{
     App, Bounds, Context, CursorStyle, EntityInputHandler, FocusHandle, Focusable, MouseButton,
-    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Point, UTF16Selection, Window, div, prelude::*,
-    px,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, Point, UTF16Selection, Window, div, point,
+    prelude::*, px,
 };
 use std::ops::Range;
+
+use crate::widgets::scrollbars::{ScrollbarAxis, Scrollbars, WheelScrollMode};
 
 impl SelectableTextView {
     pub fn new(cx: &mut Context<Self>) -> Self {
@@ -12,6 +14,8 @@ impl SelectableTextView {
             focus_handle: cx.focus_handle(),
             content: gpui::SharedString::new_static(""),
             highlight_mode: HighlightMode::Plain,
+            scroll_handle: gpui::ScrollHandle::new(),
+            scrollbar_theme: Default::default(),
             selected_range: 0..0,
             selection_reversed: false,
             last_lines: Vec::new(),
@@ -32,12 +36,17 @@ impl SelectableTextView {
     ) {
         self.content = text.into();
         self.highlight_mode = highlight_mode;
+        self.scroll_handle.set_offset(point(px(0.0), px(0.0)));
         self.selected_range = 0..0;
         self.selection_reversed = false;
         self.last_lines.clear();
         self.last_bounds = None;
         self.is_selecting = false;
         cx.notify();
+    }
+
+    pub fn set_scrollbar_theme(&mut self, theme: crate::widgets::scrollbars::ScrollbarTheme) {
+        self.scrollbar_theme = theme;
     }
 
     fn line_count(&self) -> usize {
@@ -279,16 +288,38 @@ impl Focusable for SelectableTextView {
 
 impl gpui::Render for SelectableTextView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let scroll_handle = self.scroll_handle.clone();
+        let view_id = cx.entity_id();
+
         div()
             .size_full()
+            .relative()
             .track_focus(&self.focus_handle(cx))
             .child(
                 div()
                     .id("selectable-text-scroll")
                     .size_full()
                     .overflow_scroll()
+                    .track_scroll(&self.scroll_handle)
                     .cursor(CursorStyle::IBeam)
+                    .on_scroll_wheel(move |event, window, cx| {
+                        let mut offset = scroll_handle.offset();
+                        let previous_offset = offset;
+                        let delta = event.delta.pixel_delta(window.line_height());
+                        offset.y =
+                            (offset.y + delta.y).clamp(-scroll_handle.max_offset().height, px(0.0));
+                        scroll_handle.set_offset(offset);
+                        if offset != previous_offset {
+                            cx.notify(view_id);
+                        }
+                        cx.stop_propagation();
+                    })
                     .child(SelectableTextElement { view: cx.entity() }),
+            )
+            .child(
+                Scrollbars::new(&self.scroll_handle, self.scrollbar_theme)
+                    .axis(ScrollbarAxis::Both)
+                    .wheel_mode(WheelScrollMode::Native),
             )
             .on_mouse_down(MouseButton::Left, cx.listener(Self::on_mouse_down))
             .on_mouse_up(MouseButton::Left, cx.listener(Self::on_mouse_up))

@@ -1,4 +1,7 @@
-use gpui::{Bounds, Entity, FocusHandle, PaintQuad, Pixels, ShapedLine, SharedString};
+use super::scrollbars::ScrollbarTheme;
+use gpui::{
+    Bounds, Entity, FocusHandle, PaintQuad, Pixels, ScrollHandle, ShapedLine, SharedString,
+};
 use std::ops::Range;
 
 mod behavior;
@@ -25,6 +28,8 @@ pub struct SelectableTextView {
     focus_handle: FocusHandle,
     content: SharedString,
     highlight_mode: HighlightMode,
+    scroll_handle: ScrollHandle,
+    scrollbar_theme: ScrollbarTheme,
     selected_range: Range<usize>,
     selection_reversed: bool,
     last_lines: Vec<LineState>,

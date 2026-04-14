@@ -38,7 +38,16 @@ impl LevelDbBrowserApp {
     ) -> gpui::Div {
         let tree_rows = self.visible_tree_rows();
         let content_width = self.tree_content_width();
-        let body = div().id("folder-tree-scroll").flex_1().overflow_scroll();
+        let scrollbar_theme = self.scrollbar_theme();
+        let body = div()
+            .id("folder-tree-scroll")
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .overflow_scroll()
+            .track_scroll(&self.sidebar_scroll);
         let body = if tree_rows.is_empty() {
             body.child(empty_state(i18n.text(TextKey::NoFoldersAvailable), palette))
         } else {
@@ -64,7 +73,18 @@ impl LevelDbBrowserApp {
             .border_r_1()
             .border_color(palette.border)
             .child(panel_header(i18n.text(TextKey::FolderTree), palette))
-            .child(body)
+            .child(
+                div()
+                    .flex_1()
+                    .relative()
+                    .overflow_hidden()
+                    .child(body)
+                    .child(
+                        Scrollbars::new(&self.sidebar_scroll, scrollbar_theme)
+                            .axis(ScrollbarAxis::Both)
+                            .wheel_mode(WheelScrollMode::Native),
+                    ),
+            )
     }
 
     fn render_browser_panel(
@@ -75,31 +95,33 @@ impl LevelDbBrowserApp {
         i18n: I18n,
     ) -> gpui::Div {
         let browser_entries = self.current_browser_entries();
+        let scrollbar_theme = self.scrollbar_theme();
+        let grid = div()
+            .id("browser-grid-scroll")
+            .absolute()
+            .top_0()
+            .left_0()
+            .right_0()
+            .bottom_0()
+            .overflow_y_scroll()
+            .overflow_x_hidden()
+            .track_scroll(&self.browser_scroll)
+            .px_3()
+            .py_3();
         let grid = if browser_entries.is_empty() {
-            div()
-                .id("browser-grid-empty")
-                .flex_1()
-                .overflow_hidden()
-                .child(empty_state(i18n.text(TextKey::FolderEmpty), palette))
+            grid.child(empty_state(i18n.text(TextKey::FolderEmpty), palette))
         } else {
             let palette = palette;
             let language = i18n.language();
-            div()
-                .id("browser-grid-scroll")
-                .flex_1()
-                .overflow_y_scroll()
-                .overflow_x_hidden()
-                .px_3()
-                .py_3()
-                .child(div().flex().flex_wrap().items_start().gap_3().children(
-                    browser_entries.into_iter().map(|entry| FileBrowserCard {
-                        app: app.clone(),
-                        selected: self.selected_dir == entry.path,
-                        entry,
-                        palette,
-                        language,
-                    }),
-                ))
+            grid.child(div().flex().flex_wrap().items_start().gap_3().children(
+                browser_entries.into_iter().map(|entry| FileBrowserCard {
+                    app: app.clone(),
+                    selected: self.selected_dir == entry.path,
+                    entry,
+                    palette,
+                    language,
+                }),
+            ))
         };
 
         div()
@@ -110,7 +132,18 @@ impl LevelDbBrowserApp {
             .overflow_hidden()
             .bg(palette.surface_bg)
             .child(self.render_browser_title_bar(cx, palette, i18n))
-            .child(grid)
+            .child(
+                div()
+                    .flex_1()
+                    .relative()
+                    .overflow_hidden()
+                    .child(grid)
+                    .child(
+                        Scrollbars::new(&self.browser_scroll, scrollbar_theme)
+                            .axis(ScrollbarAxis::Vertical)
+                            .wheel_mode(WheelScrollMode::Native),
+                    ),
+            )
     }
 
     fn render_browser_title_bar(
@@ -230,6 +263,7 @@ impl LevelDbBrowserApp {
             .current
             .map(|index| index + 1)
             .unwrap_or(0);
+        let scrollbar_theme = self.scrollbar_theme();
         let list_body = div().flex_1().overflow_hidden();
         let list_body = if self.entries.is_empty() {
             list_body.child(empty_state(i18n.text(TextKey::NoEntries), palette))
@@ -238,21 +272,32 @@ impl LevelDbBrowserApp {
             let palette = palette;
             let widths = widths;
             list_body.child(
-                uniform_list(
-                    "leveldb-entries",
-                    self.entries.len(),
-                    cx.processor(move |this, range: std::ops::Range<usize>, _, _| {
-                        (range.start..range.end.min(this.entries.len()))
-                            .map(|index| ParsedEntryRow {
-                                app: app.clone(),
-                                index,
-                                palette,
-                                widths,
-                            })
-                            .collect::<Vec<_>>()
-                    }),
-                )
-                .size_full(),
+                div()
+                    .size_full()
+                    .relative()
+                    .child(
+                        uniform_list(
+                            "leveldb-entries",
+                            self.entries.len(),
+                            cx.processor(move |this, range: std::ops::Range<usize>, _, _| {
+                                (range.start..range.end.min(this.entries.len()))
+                                    .map(|index| ParsedEntryRow {
+                                        app: app.clone(),
+                                        index,
+                                        palette,
+                                        widths,
+                                    })
+                                    .collect::<Vec<_>>()
+                            }),
+                        )
+                        .track_scroll(self.entries_scroll.clone())
+                        .size_full(),
+                    )
+                    .child(
+                        Scrollbars::new(&self.entries_scroll, scrollbar_theme)
+                            .axis(ScrollbarAxis::Vertical)
+                            .wheel_mode(WheelScrollMode::Native),
+                    ),
             )
         };
 
@@ -414,7 +459,6 @@ impl LevelDbBrowserApp {
     ) -> gpui::Div {
         let selected_mode = self.selected_detail_mode();
         let body: AnyElement = if let Some(detail) = &self.selected_detail {
-            let label = self.detail_label(i18n, detail.column);
             let target = ParseContextTarget::Cell {
                 row: detail.row,
                 column: detail.column,
@@ -426,7 +470,6 @@ impl LevelDbBrowserApp {
                 .py_2()
                 .flex()
                 .flex_col()
-                .gap_2()
                 .cursor_context_menu()
                 .id("detail-panel-body")
                 .on_mouse_down(
@@ -436,7 +479,6 @@ impl LevelDbBrowserApp {
                         cx.notify();
                     }),
                 )
-                .child(div().text_sm().text_color(palette.muted_text).child(label))
                 .child(
                     div()
                         .flex_1()

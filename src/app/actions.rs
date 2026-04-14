@@ -20,6 +20,9 @@ impl LevelDbBrowserApp {
             entries: Vec::new(),
             loaded_db_path: None,
             selected_detail: None,
+            sidebar_scroll: ScrollHandle::new(),
+            browser_scroll: ScrollHandle::new(),
+            entries_scroll: UniformListScrollHandle::new(),
             detail_text_view,
             search_input: search_input.clone(),
             toast: None,
@@ -54,6 +57,7 @@ impl LevelDbBrowserApp {
             cx.notify();
         })
         .detach();
+        app.sync_detail_view(cx);
         app
     }
 
@@ -63,6 +67,16 @@ impl LevelDbBrowserApp {
 
     fn palette(&self) -> Palette {
         Palette::for_mode(self.config.visual_mode)
+    }
+
+    fn scrollbar_theme(&self) -> ScrollbarTheme {
+        let palette = self.palette();
+        ScrollbarTheme {
+            track: palette.window_bg.into(),
+            thumb: palette.border.into(),
+            thumb_hover: palette.button_compact_hover.into(),
+            thumb_active: palette.splitter_active.into(),
+        }
     }
 
     fn show_toast(&mut self, kind: ToastKind, message: String) {
@@ -441,8 +455,10 @@ impl LevelDbBrowserApp {
                     })
             })
             .unwrap_or_else(|| (String::new(), HighlightMode::Plain));
+        let scrollbar_theme = self.scrollbar_theme();
 
         self.detail_text_view.update(cx, |view, cx| {
+            view.set_scrollbar_theme(scrollbar_theme);
             view.set_text_with_highlight(text, highlight_mode, cx)
         });
     }
@@ -557,13 +573,6 @@ impl LevelDbBrowserApp {
 
         if let Some(detail) = self.search_state.matches.get(next).cloned() {
             self.show_detail(detail.row, detail.column, cx);
-        }
-    }
-
-    fn detail_label(&self, i18n: I18n, column: ParsedColumn) -> String {
-        match column {
-            ParsedColumn::Key => i18n.text(TextKey::EntryKey).to_owned(),
-            ParsedColumn::Value => i18n.text(TextKey::EntryValue).to_owned(),
         }
     }
 
