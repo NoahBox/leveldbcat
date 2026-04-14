@@ -1,3 +1,2 @@
-dist/
-@LeveldbCat.exe
+target/
 LeveldbCat.exe
