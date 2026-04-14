@@ -248,6 +248,7 @@ impl RenderOnce for ParsedEntryRow {
                                     column: ParsedColumn::Key,
                                 },
                                 event.position,
+                                false,
                             );
                             cx.notify();
                         });
@@ -279,6 +280,7 @@ impl RenderOnce for ParsedEntryRow {
                                     column: ParsedColumn::Value,
                                 },
                                 event.position,
+                                false,
                             );
                             cx.notify();
                         });

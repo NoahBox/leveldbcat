@@ -313,8 +313,17 @@ impl LevelDbBrowserApp {
         self.context_menu = None;
     }
 
-    fn open_context_menu(&mut self, target: ParseContextTarget, position: Point<Pixels>) {
-        self.context_menu = Some(ParseContextMenu { target, position });
+    fn open_context_menu(
+        &mut self,
+        target: ParseContextTarget,
+        position: Point<Pixels>,
+        prefer_selected_detail_text: bool,
+    ) {
+        self.context_menu = Some(ParseContextMenu {
+            target,
+            position,
+            prefer_selected_detail_text,
+        });
     }
 
     fn parse_selected_directory(&mut self, cx: &mut Context<Self>) {
@@ -658,7 +667,14 @@ impl LevelDbBrowserApp {
 
         match action {
             ParseMenuAction::Copy => {
-                if let Some(text) = self.copy_target_text(menu.target) {
+                let text = if menu.prefer_selected_detail_text {
+                    self.selected_detail_text(cx)
+                        .or_else(|| self.copy_target_text(menu.target))
+                } else {
+                    self.copy_target_text(menu.target)
+                };
+
+                if let Some(text) = text {
                     cx.write_to_clipboard(ClipboardItem::new_string(text));
                 }
             }
@@ -689,12 +705,23 @@ impl LevelDbBrowserApp {
         }
     }
 
+    fn selected_detail_text(&self, cx: &App) -> Option<String> {
+        self.detail_text_view.read(cx).selected_text()
+    }
+
     fn copy_selected_item_to_clipboard(&mut self, cx: &mut Context<Self>) {
         let Some(detail) = self.selected_detail.clone() else {
             return;
         };
 
-        if let Some(text) = self.formatted_cell_text(detail.row, detail.column) {
+        let text = self.selected_detail_text(cx).or_else(|| {
+            self.copy_target_text(ParseContextTarget::Cell {
+                row: detail.row,
+                column: detail.column,
+            })
+        });
+
+        if let Some(text) = text {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
     }

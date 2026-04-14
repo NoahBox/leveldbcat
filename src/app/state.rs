@@ -118,6 +118,7 @@ impl Default for ColumnModes {
 struct ParseContextMenu {
     target: ParseContextTarget,
     position: Point<Pixels>,
+    prefer_selected_detail_text: bool,
 }
 
 #[derive(Clone, Copy)]

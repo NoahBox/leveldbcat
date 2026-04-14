@@ -42,16 +42,16 @@ impl I18n {
     pub fn about_text(self) -> &'static str {
         match self.language {
             AppLanguage::English => {
-                "LeveldbCat\nVersion 0.1.1\nPowered by NoahTie@XD Forensics\nThis project is part of the Forensics Cat tool suite.\nFor learning and communication only.\nLicense: MIT"
+                "LeveldbCat\nVersion 0.1.2\nPowered by NoahTie@XD Forensics\nThis project is part of the Forensics Cat tool suite.\nFor learning and communication only.\nLicense: MIT"
             }
             AppLanguage::Chinese => {
-                "LeveldbCat\n版本 0.1.1\nPowered by NoahTie@XD Forensics\n该项目是取证猫工具套组的一部分.\n仅用于学习交流.\n许可条款: MIT"
+                "LeveldbCat\n版本 0.1.2\nPowered by NoahTie@XD Forensics\n该项目是取证猫工具套组的一部分.\n仅用于学习交流.\n许可条款: MIT"
             }
             AppLanguage::TraditionalChinese => {
-                "LeveldbCat\n版本 0.1.1\nPowered by NoahTie@XD Forensics\n該專案是取證貓工具套組的一部分.\n僅用於學習交流.\n授權條款: MIT"
+                "LeveldbCat\n版本 0.1.2\nPowered by NoahTie@XD Forensics\n該專案是取證貓工具套組的一部分.\n僅用於學習交流.\n授權條款: MIT"
             }
             AppLanguage::Japanese => {
-                "LeveldbCat\nバージョン 0.1.1\nPowered by NoahTie@XD Forensics\nこのプロジェクトは取证猫ツールスイートの一部です.\n学習と交流目的のみに使用してください.\nLicense: MIT"
+                "LeveldbCat\nバージョン 0.1.2\nPowered by NoahTie@XD Forensics\nこのプロジェクトは取证猫ツールスイートの一部です.\n学習と交流目的のみに使用してください.\nLicense: MIT"
             }
         }
     }

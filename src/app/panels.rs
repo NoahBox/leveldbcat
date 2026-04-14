@@ -423,6 +423,7 @@ impl LevelDbBrowserApp {
                                     this.open_context_menu(
                                         ParseContextTarget::Header(ParsedColumn::Key),
                                         event.position,
+                                        false,
                                     );
                                     cx.notify();
                                 }),
@@ -442,6 +443,7 @@ impl LevelDbBrowserApp {
                                     this.open_context_menu(
                                         ParseContextTarget::Header(ParsedColumn::Value),
                                         event.position,
+                                        false,
                                     );
                                     cx.notify();
                                 }),
@@ -458,6 +460,7 @@ impl LevelDbBrowserApp {
         i18n: I18n,
     ) -> gpui::Div {
         let selected_mode = self.selected_detail_mode();
+        let wrap_lines = self.detail_text_view.read(cx).wrap_lines();
         let body: AnyElement = if let Some(detail) = &self.selected_detail {
             let target = ParseContextTarget::Cell {
                 row: detail.row,
@@ -475,7 +478,7 @@ impl LevelDbBrowserApp {
                 .on_mouse_down(
                     MouseButton::Right,
                     cx.listener(move |this, event: &MouseDownEvent, _, cx| {
-                        this.open_context_menu(target, event.position);
+                        this.open_context_menu(target, event.position, true);
                         cx.notify();
                     }),
                 )
@@ -514,6 +517,16 @@ impl LevelDbBrowserApp {
                     .border_b_1()
                     .border_color(palette.subtle_border)
                     .child(div().flex_1().child(i18n.text(TextKey::SelectedValue)))
+                    .child(
+                        choice_button(i18n.text(TextKey::WrapLines), wrap_lines, palette)
+                            .id("detail-wrap-lines")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.detail_text_view.update(cx, |view, cx| {
+                                    view.set_wrap_lines(!view.wrap_lines(), cx);
+                                });
+                                cx.notify();
+                            })),
+                    )
                     .child(
                         choice_button(
                             i18n.text(TextKey::ModeBytes),

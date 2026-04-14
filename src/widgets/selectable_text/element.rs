@@ -1,6 +1,6 @@
-use super::{LineState, PrepaintState, SelectableTextElement};
+use super::{PrepaintState, SelectableTextElement, TextLayoutState};
 use gpui::{
-    App, Bounds, Element, ElementId, ElementInputHandler, GlobalElementId, LayoutId, Pixels, Style,
+    App, Bounds, Element, ElementId, ElementInputHandler, GlobalElementId, LayoutId, Pixels,
     Window, fill, point, px, rgba, size,
 };
 
@@ -13,7 +13,7 @@ impl gpui::IntoElement for SelectableTextElement {
 }
 
 impl Element for SelectableTextElement {
-    type RequestLayoutState = Vec<LineState>;
+    type RequestLayoutState = TextLayoutState;
     type PrepaintState = PrepaintState;
 
     fn id(&self) -> Option<ElementId> {
@@ -31,28 +31,61 @@ impl Element for SelectableTextElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let input = self.view.read(cx);
         let style = window.text_style();
         let font_size = style.font_size.to_pixels(window.rem_size());
         let line_height = window.line_height();
-        let line_states = super::highlight::shape_lines(
-            input.content.clone(),
-            font_size,
-            style.color,
-            input.highlight_mode,
-            window,
+        let (content, highlight_mode, wrap_lines) = {
+            let input = self.view.read(cx);
+            (
+                input.content.clone(),
+                input.highlight_mode,
+                input.wrap_lines,
+            )
+        };
+        let color = style.color;
+
+        let state = TextLayoutState::default();
+        let layout_state = state.clone();
+        let layout_id = window.request_measured_layout(
+            Default::default(),
+            move |known_dimensions, available_space, window, _cx| {
+                let wrap_width = if wrap_lines {
+                    known_dimensions.width.or(match available_space.width {
+                        gpui::AvailableSpace::Definite(width) => Some(width),
+                        _ => None,
+                    })
+                } else {
+                    None
+                };
+                let lines = super::highlight::shape_lines(
+                    content.clone(),
+                    font_size,
+                    color,
+                    highlight_mode,
+                    wrap_width,
+                    window,
+                );
+                let mut size: gpui::Size<Pixels> = gpui::Size::default();
+
+                for line in &lines {
+                    let line_size = line.layout.size(line_height);
+                    size.height += line_size.height;
+                    size.width = size.width.max(line_size.width).ceil();
+                }
+
+                size.width = size.width.max(px(1.0));
+                size.height = size.height.max(line_height);
+
+                layout_state
+                    .0
+                    .borrow_mut()
+                    .replace(super::MeasuredTextLayout { lines, line_height });
+
+                size
+            },
         );
-        let max_width = line_states
-            .iter()
-            .map(|line| line.layout.width)
-            .max()
-            .unwrap_or(Pixels::ZERO);
 
-        let mut layout_style = Style::default();
-        layout_style.size.width = max_width.max(px(1.0)).into();
-        layout_style.size.height = (line_height * line_states.len() as f32).into();
-
-        (window.request_layout(layout_style, [], cx), line_states)
+        (layout_id, state)
     }
 
     fn prepaint(
@@ -61,51 +94,82 @@ impl Element for SelectableTextElement {
         _inspector_id: Option<&gpui::InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
+        let measured = request_layout.0.borrow();
+        let Some(measured) = measured.as_ref() else {
+            return PrepaintState {
+                lines: Vec::new(),
+                selections: Vec::new(),
+                cursor: None,
+                line_height: px(0.0),
+            };
+        };
         let input = self.view.read(cx);
-        let line_height = window.line_height();
+        let line_height = measured.line_height;
         let cursor_offset = input.cursor_offset();
         let mut selections = Vec::new();
         let mut cursor = None;
+        let mut lines = measured.lines.clone();
+        let mut line_origin = bounds.origin;
 
-        for (index, line) in request_layout.iter().enumerate() {
-            let line_top = bounds.top() + line_height * index as f32;
-            let line_bottom = line_top + line_height;
+        for line in &mut lines {
+            let line_size = line.layout.size(line_height);
+            let line_bounds = Bounds::new(line_origin, line_size);
+            line.bounds = Some(line_bounds);
             let overlap_start = input.selected_range.start.max(line.start);
             let overlap_end = input.selected_range.end.min(line.end);
 
             if overlap_start < overlap_end {
-                let start_x = line.layout.x_for_index(overlap_start - line.start);
-                let end_x = line.layout.x_for_index(overlap_end - line.start);
-                selections.push(fill(
-                    Bounds::new(
-                        point(bounds.left() + start_x, line_top),
-                        size((end_x - start_x).max(px(2.0)), line_bottom - line_top),
-                    ),
-                    rgba(0x3311ff30),
-                ));
+                let local_start = overlap_start - line.start;
+                let local_end = overlap_end - line.start;
+
+                for (row_index, row) in super::wrapped_rows(&line.layout).into_iter().enumerate() {
+                    let segment_start = local_start.max(row.start);
+                    let segment_end = local_end.min(row.end);
+                    if segment_start >= segment_end {
+                        continue;
+                    }
+
+                    let start_x =
+                        line.layout.unwrapped_layout.x_for_index(segment_start) - row.start_x;
+                    let end_x = line.layout.unwrapped_layout.x_for_index(segment_end) - row.start_x;
+                    selections.push(fill(
+                        Bounds::new(
+                            point(
+                                line_bounds.left() + start_x,
+                                line_bounds.top() + line_height * row_index as f32,
+                            ),
+                            size((end_x - start_x).max(px(2.0)), line_height),
+                        ),
+                        rgba(0x3311ff30),
+                    ));
+                }
             } else if input.selected_range.is_empty()
                 && cursor.is_none()
                 && cursor_offset >= line.start
                 && cursor_offset <= line.end
+                && let Some(local_cursor) =
+                    super::local_position_for_index(line, cursor_offset, line_height, true)
             {
-                let cursor_x = line.layout.x_for_index(cursor_offset - line.start);
                 cursor = Some(fill(
                     Bounds::new(
-                        point(bounds.left() + cursor_x, line_top),
-                        size(px(2.0), line_bottom - line_top),
+                        line_bounds.origin + local_cursor,
+                        size(px(2.0), line_height),
                     ),
                     gpui::blue(),
                 ));
             }
+
+            line_origin.y += line_size.height;
         }
 
         PrepaintState {
-            lines: request_layout.clone(),
+            lines,
             selections,
             cursor,
+            line_height,
         }
     }
 
@@ -130,10 +194,23 @@ impl Element for SelectableTextElement {
             window.paint_quad(selection);
         }
 
-        let line_height = window.line_height();
-        for (index, line) in prepaint.lines.iter().enumerate() {
-            let origin = point(bounds.left(), bounds.top() + line_height * index as f32);
-            line.layout.paint(origin, line_height, window, cx).ok();
+        let text_align = window.text_style().text_align;
+        let line_height = prepaint.line_height.max(px(0.0));
+
+        for line in &prepaint.lines {
+            let Some(line_bounds) = line.bounds else {
+                continue;
+            };
+            line.layout
+                .paint(
+                    line_bounds.origin,
+                    line_height,
+                    text_align,
+                    Some(bounds),
+                    window,
+                    cx,
+                )
+                .ok();
         }
 
         if focus_handle.is_focused(window)
@@ -145,7 +222,7 @@ impl Element for SelectableTextElement {
         let lines = prepaint.lines.clone();
         self.view.update(cx, |input, _cx| {
             input.last_lines = lines;
-            input.last_bounds = Some(bounds);
+            input.last_line_height = line_height;
         });
     }
 }

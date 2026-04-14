@@ -18,6 +18,7 @@ pub enum TextKey {
     ModeBytes,
     ModeJson,
     ModeText,
+    WrapLines,
     ExportCsv,
     Search,
     SearchPlaceholder,

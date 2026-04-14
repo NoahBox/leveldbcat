@@ -4,7 +4,7 @@ use gpui::{
     MouseDownEvent, MouseMoveEvent, MouseUpEvent, Point, UTF16Selection, Window, div, point,
     prelude::*, px,
 };
-use std::ops::Range;
+use std::{cell::RefCell, ops::Range, rc::Rc};
 
 use crate::widgets::scrollbars::{ScrollbarAxis, Scrollbars, WheelScrollMode};
 
@@ -14,12 +14,14 @@ impl SelectableTextView {
             focus_handle: cx.focus_handle(),
             content: gpui::SharedString::new_static(""),
             highlight_mode: HighlightMode::Plain,
+            wrap_lines: false,
             scroll_handle: gpui::ScrollHandle::new(),
+            last_scroll_offset: Rc::new(RefCell::new(point(px(0.0), px(0.0)))),
             scrollbar_theme: Default::default(),
             selected_range: 0..0,
             selection_reversed: false,
             last_lines: Vec::new(),
-            last_bounds: None,
+            last_line_height: px(0.0),
             is_selecting: false,
         }
     }
@@ -37,10 +39,11 @@ impl SelectableTextView {
         self.content = text.into();
         self.highlight_mode = highlight_mode;
         self.scroll_handle.set_offset(point(px(0.0), px(0.0)));
+        *self.last_scroll_offset.borrow_mut() = point(px(0.0), px(0.0));
         self.selected_range = 0..0;
         self.selection_reversed = false;
         self.last_lines.clear();
-        self.last_bounds = None;
+        self.last_line_height = px(0.0);
         self.is_selecting = false;
         cx.notify();
     }
@@ -49,8 +52,32 @@ impl SelectableTextView {
         self.scrollbar_theme = theme;
     }
 
-    fn line_count(&self) -> usize {
-        self.content.as_ref().split('\n').count().max(1)
+    pub fn wrap_lines(&self) -> bool {
+        self.wrap_lines
+    }
+
+    pub fn set_wrap_lines(&mut self, wrap_lines: bool, cx: &mut Context<Self>) {
+        if self.wrap_lines == wrap_lines {
+            return;
+        }
+
+        self.wrap_lines = wrap_lines;
+        self.last_lines.clear();
+        self.last_line_height = px(0.0);
+
+        if wrap_lines {
+            let mut offset = self.scroll_handle.offset();
+            offset.x = px(0.0);
+            self.scroll_handle.set_offset(offset);
+            *self.last_scroll_offset.borrow_mut() = offset;
+        }
+
+        cx.notify();
+    }
+
+    pub fn selected_text(&self) -> Option<String> {
+        (!self.selected_range.is_empty())
+            .then(|| self.content[self.selected_range.clone()].to_string())
     }
 
     fn move_to(&mut self, offset: usize, cx: &mut Context<Self>) {
@@ -83,33 +110,91 @@ impl SelectableTextView {
     }
 
     fn index_for_mouse_position(&self, position: Point<gpui::Pixels>) -> usize {
-        let Some(bounds) = self.last_bounds else {
+        let Some(first_line) = self.last_lines.first() else {
+            return 0;
+        };
+        let Some(first_bounds) = first_line.bounds else {
             return 0;
         };
 
-        if position.y <= bounds.top() {
+        if position.y <= first_bounds.top() || self.last_line_height <= px(0.0) {
             return 0;
         }
 
-        if position.y >= bounds.bottom() {
-            return self.content.len();
+        for line in &self.last_lines {
+            let Some(bounds) = line.bounds else {
+                continue;
+            };
+
+            if position.y > bounds.bottom() {
+                continue;
+            }
+
+            let local_position = position - bounds.origin;
+            let local_index = match line
+                .layout
+                .closest_index_for_position(local_position, self.last_line_height)
+            {
+                Ok(index) | Err(index) => index,
+            };
+
+            return line.start + local_index;
         }
 
-        let line_height = if self.last_lines.is_empty() {
-            px(0.0)
+        self.content.len()
+    }
+
+    fn global_position_for_index(
+        &self,
+        index: usize,
+        prefer_next_row_on_boundary: bool,
+    ) -> Option<Point<gpui::Pixels>> {
+        for line in &self.last_lines {
+            let Some(bounds) = line.bounds else {
+                continue;
+            };
+
+            if index < line.start || index > line.end {
+                continue;
+            }
+
+            let local = super::local_position_for_index(
+                line,
+                index,
+                self.last_line_height,
+                prefer_next_row_on_boundary,
+            )?;
+            return Some(bounds.origin + local);
+        }
+
+        None
+    }
+
+    fn line_index_for_offset(&self, offset: usize) -> Option<usize> {
+        self.last_lines
+            .iter()
+            .position(|line| offset >= line.start && offset <= line.end)
+    }
+
+    fn selection_bounds(&self, range: &Range<usize>) -> Option<Bounds<gpui::Pixels>> {
+        if self.last_line_height <= px(0.0) {
+            return None;
+        }
+
+        let start_line = self.line_index_for_offset(range.start)?;
+        let end_line = self.line_index_for_offset(range.end)?;
+        let start = self.global_position_for_index(range.start, true)?;
+        let end = self.global_position_for_index(range.end, false)?;
+        let end_x = if start_line == end_line {
+            end.x.max(start.x + px(1.0))
         } else {
-            bounds.size.height / self.last_lines.len() as f32
+            end.x
         };
 
-        if line_height <= px(0.0) {
-            return 0;
-        }
-
-        let line_index = (((position.y - bounds.top()) / line_height) as usize)
-            .min(self.last_lines.len().saturating_sub(1));
-        let line = &self.last_lines[line_index];
-        let local_x = position.x - bounds.left();
-        line.start + line.layout.closest_index_for_x(local_x)
+        Some(Bounds::from_corners(
+            start,
+            gpui::point(end_x, end.y + self.last_line_height),
+        ))
     }
 
     fn on_mouse_down(
@@ -234,40 +319,12 @@ impl EntityInputHandler for SelectableTextView {
     fn bounds_for_range(
         &mut self,
         range_utf16: Range<usize>,
-        bounds: Bounds<gpui::Pixels>,
+        _bounds: Bounds<gpui::Pixels>,
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) -> Option<Bounds<gpui::Pixels>> {
         let range = self.range_from_utf16(&range_utf16);
-        let start = self
-            .last_lines
-            .iter()
-            .enumerate()
-            .find_map(|(index, line)| {
-                (range.start >= line.start && range.start <= line.end).then_some((index, line))
-            })?;
-        let end = self
-            .last_lines
-            .iter()
-            .enumerate()
-            .find_map(|(index, line)| {
-                (range.end >= line.start && range.end <= line.end).then_some((index, line))
-            })?;
-
-        let line_height = bounds.size.height / self.line_count() as f32;
-        let start_x = start.1.layout.x_for_index(range.start - start.1.start);
-        let end_x = end.1.layout.x_for_index(range.end - end.1.start);
-
-        Some(Bounds::from_corners(
-            gpui::point(
-                bounds.left() + start_x,
-                bounds.top() + line_height * start.0 as f32,
-            ),
-            gpui::point(
-                bounds.left() + end_x.max(start_x + px(1.0)),
-                bounds.top() + line_height * (end.0 as f32 + 1.0),
-            ),
-        ))
+        self.selection_bounds(&range)
     }
 
     fn character_index_for_point(
@@ -289,7 +346,10 @@ impl Focusable for SelectableTextView {
 impl gpui::Render for SelectableTextView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let scroll_handle = self.scroll_handle.clone();
+        let last_scroll_offset = self.last_scroll_offset.clone();
         let view_id = cx.entity_id();
+
+        *self.last_scroll_offset.borrow_mut() = self.scroll_handle.offset();
 
         div()
             .size_full()
@@ -299,19 +359,20 @@ impl gpui::Render for SelectableTextView {
                 div()
                     .id("selectable-text-scroll")
                     .size_full()
-                    .overflow_scroll()
+                    .overflow_x_scroll()
+                    .overflow_y_scroll()
                     .track_scroll(&self.scroll_handle)
                     .cursor(CursorStyle::IBeam)
-                    .on_scroll_wheel(move |event, window, cx| {
+                    .on_scroll_wheel(move |_, _, cx| {
                         let mut offset = scroll_handle.offset();
                         let previous_offset = offset;
-                        let delta = event.delta.pixel_delta(window.line_height());
-                        offset.y =
-                            (offset.y + delta.y).clamp(-scroll_handle.max_offset().height, px(0.0));
-                        scroll_handle.set_offset(offset);
+                        offset.x = last_scroll_offset.borrow().x;
+
                         if offset != previous_offset {
+                            scroll_handle.set_offset(offset);
                             cx.notify(view_id);
                         }
+
                         cx.stop_propagation();
                     })
                     .child(SelectableTextElement { view: cx.entity() }),
