@@ -41,18 +41,26 @@ impl I18n {
 
     pub fn about_text(self) -> &'static str {
         match self.language {
-            AppLanguage::English => {
-                "LeveldbCat\nVersion 0.1.2\nPowered by NoahTie@XD Forensics\nThis project is part of the Forensics Cat tool suite.\nFor learning and communication only.\nLicense: MIT"
-            }
-            AppLanguage::Chinese => {
-                "LeveldbCat\n版本 0.1.2\nPowered by NoahTie@XD Forensics\n该项目是取证猫工具套组的一部分.\n仅用于学习交流.\n许可条款: MIT"
-            }
-            AppLanguage::TraditionalChinese => {
-                "LeveldbCat\n版本 0.1.2\nPowered by NoahTie@XD Forensics\n該專案是取證貓工具套組的一部分.\n僅用於學習交流.\n授權條款: MIT"
-            }
-            AppLanguage::Japanese => {
-                "LeveldbCat\nバージョン 0.1.2\nPowered by NoahTie@XD Forensics\nこのプロジェクトは取证猫ツールスイートの一部です.\n学習と交流目的のみに使用してください.\nLicense: MIT"
-            }
+            AppLanguage::English => concat!(
+                "LeveldbCat\nVersion ",
+                env!("CARGO_PKG_VERSION"),
+                "\nPowered by NoahTie@XD Forensics\nThis project is part of the Forensics Cat tool suite.\nFor learning and communication only.\nLicense: MIT"
+            ),
+            AppLanguage::Chinese => concat!(
+                "LeveldbCat\n版本 ",
+                env!("CARGO_PKG_VERSION"),
+                "\nPowered by NoahTie@XD Forensics\n该项目是取证猫工具套组的一部分.\n仅用于学习交流.\n许可条款: MIT"
+            ),
+            AppLanguage::TraditionalChinese => concat!(
+                "LeveldbCat\n版本 ",
+                env!("CARGO_PKG_VERSION"),
+                "\nPowered by NoahTie@XD Forensics\n該專案是取證貓工具套組的一部分.\n僅用於學習交流.\n授權條款: MIT"
+            ),
+            AppLanguage::Japanese => concat!(
+                "LeveldbCat\nバージョン ",
+                env!("CARGO_PKG_VERSION"),
+                "\nPowered by NoahTie@XD Forensics\nこのプロジェクトは取证猫ツールスイートの一部です.\n学習と交流目的のみに使用してください.\nLicense: MIT"
+            ),
         }
     }
 
@@ -123,6 +131,36 @@ impl I18n {
             AppLanguage::Chinese => format!("CSV 导出失败: {error}"),
             AppLanguage::TraditionalChinese => format!("CSV 匯出失敗: {error}"),
             AppLanguage::Japanese => format!("CSV のエクスポートに失敗しました: {error}"),
+        }
+    }
+
+    pub fn locked_database_title(self) -> &'static str {
+        match self.language {
+            AppLanguage::English => "Locked LevelDB Folder",
+            AppLanguage::Chinese => "LevelDB 文件夹已锁定",
+            AppLanguage::TraditionalChinese => "LevelDB 資料夾已鎖定",
+            AppLanguage::Japanese => "LevelDB フォルダーがロックされています",
+        }
+    }
+
+    pub fn locked_database_warning(self, path: &Path, lock_file_name: &str) -> String {
+        match self.language {
+            AppLanguage::English => format!(
+                "Found a persisted {lock_file_name} file in {}.\n\nThe database may still be in use, or the lock file may be stale. Continue opening a temporary copy without the lock file?",
+                path.display()
+            ),
+            AppLanguage::Chinese => format!(
+                "在 {} 中发现了残留的 {lock_file_name} 文件。\n\n数据库可能仍在使用中，也可能只是残留的锁文件。是否继续打开一个忽略该锁文件的临时副本？",
+                path.display()
+            ),
+            AppLanguage::TraditionalChinese => format!(
+                "在 {} 中發現了殘留的 {lock_file_name} 檔案。\n\n資料庫可能仍在使用中，也可能只是殘留的鎖定檔。是否繼續開啟一個忽略該鎖定檔的暫存副本？",
+                path.display()
+            ),
+            AppLanguage::Japanese => format!(
+                "{} に残っている {lock_file_name} ファイルが見つかりました。\n\nデータベースはまだ使用中の可能性があるほか、古いロックファイルが残っているだけの可能性もあります。ロックファイルを除外した一時コピーをこのまま開きますか?",
+                path.display()
+            ),
         }
     }
 

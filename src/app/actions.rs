@@ -409,7 +409,20 @@ impl LevelDbBrowserApp {
     }
 
     fn try_parse_leveldb(&mut self, path: PathBuf, cx: &mut Context<Self>) {
-        match load_entries(&path) {
+        let load_result = match persisted_lock_file_name(&path) {
+            Ok(Some(lock_file_name)) => {
+                if self.confirm_locked_database_open(&path, lock_file_name) {
+                    load_entries_ignoring_lock_file(&path)
+                } else {
+                    self.close_context_menu();
+                    return;
+                }
+            }
+            Ok(None) => load_entries(&path),
+            Err(error) => Err(error),
+        };
+
+        match load_result {
             Ok(entries) => {
                 let count = entries.len();
                 self.entries = entries;
@@ -434,6 +447,20 @@ impl LevelDbBrowserApp {
         self.column_modes = ColumnModes::default();
         self.close_context_menu();
         self.refresh_search_matches(cx);
+    }
+
+    fn confirm_locked_database_open(&self, path: &Path, lock_file_name: &str) -> bool {
+        let i18n = self.i18n();
+
+        matches!(
+            MessageDialog::new()
+                .set_title(i18n.locked_database_title())
+                .set_description(i18n.locked_database_warning(path, lock_file_name))
+                .set_buttons(MessageButtons::YesNo)
+                .set_level(MessageLevel::Warning)
+                .show(),
+            MessageDialogResult::Yes
+        )
     }
 
     fn show_detail(&mut self, row: usize, column: ParsedColumn, cx: &mut Context<Self>) {

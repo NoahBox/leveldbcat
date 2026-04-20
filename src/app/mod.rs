@@ -2,7 +2,9 @@ use crate::config::{
     AppConfig, AppLanguage, VisualMode, default_config_path, max_font_size_px, min_font_size_px,
 };
 use crate::i18n::{I18n, TextKey};
-use crate::reader::{Entry, format_bytes, load_entries};
+use crate::reader::{
+    Entry, format_bytes, load_entries, load_entries_ignoring_lock_file, persisted_lock_file_name,
+};
 use crate::widgets::scrollbars::{ScrollbarAxis, ScrollbarTheme, Scrollbars, WheelScrollMode};
 use crate::widgets::selectable_text::{HighlightMode, JsonHighlightColors, SelectableTextView};
 use crate::widgets::text_input::{
@@ -15,7 +17,7 @@ use gpui::{
     SharedString, TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
     actions, deferred, div, prelude::*, px, rgb, size, uniform_list,
 };
-use rfd::FileDialog;
+use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
