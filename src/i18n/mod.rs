@@ -190,4 +190,19 @@ impl I18n {
             AppLanguage::Japanese => format!("{font_size_px:.0} px"),
         }
     }
+
+    pub fn json_indent_value(self, spaces: u8) -> String {
+        match self.language {
+            AppLanguage::English => {
+                if spaces == 1 {
+                    "1 space".to_owned()
+                } else {
+                    format!("{spaces} spaces")
+                }
+            }
+            AppLanguage::Chinese => format!("{spaces} 空格"),
+            AppLanguage::TraditionalChinese => format!("{spaces} 空格"),
+            AppLanguage::Japanese => format!("{spaces} スペース"),
+        }
+    }
 }

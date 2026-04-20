@@ -37,6 +37,7 @@ pub enum TextKey {
     OptionsTitle,
     FontFamily,
     FontSize,
+    JsonIndent,
     VisualMode,
     Language,
     Light,

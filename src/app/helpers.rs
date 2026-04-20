@@ -193,6 +193,28 @@ fn format_bytes_with_mode(bytes: &[u8], mode: ParseMode) -> String {
     }
 }
 
+fn format_bytes_with_mode_and_json_indent(
+    bytes: &[u8],
+    mode: ParseMode,
+    json_indent_spaces: u8,
+) -> String {
+    match mode {
+        ParseMode::Json => format_json_bytes(bytes, json_indent_spaces)
+            .unwrap_or_else(|| format_bytes(bytes)),
+        _ => format_bytes_with_mode(bytes, mode),
+    }
+}
+
+fn format_json_bytes(bytes: &[u8], indent_spaces: u8) -> Option<String> {
+    let value = serde_json::from_slice::<serde_json::Value>(bytes).ok()?;
+    let indent = vec![b' '; indent_spaces as usize];
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(&indent);
+    let mut formatted = Vec::new();
+    let mut serializer = serde_json::Serializer::with_formatter(&mut formatted, formatter);
+    serde::Serialize::serialize(&value, &mut serializer).ok()?;
+    String::from_utf8(formatted).ok()
+}
+
 fn panel_header(title: impl Into<SharedString>, palette: Palette) -> gpui::Div {
     div()
         .flex_none()

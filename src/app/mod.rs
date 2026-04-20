@@ -1,5 +1,6 @@
 use crate::config::{
-    AppConfig, AppLanguage, VisualMode, default_config_path, max_font_size_px, min_font_size_px,
+    AppConfig, AppLanguage, VisualMode, default_config_path, max_font_size_px,
+    max_json_indent_spaces, min_font_size_px, min_json_indent_spaces,
 };
 use crate::i18n::{I18n, TextKey};
 use crate::reader::{
@@ -13,9 +14,9 @@ use crate::widgets::text_input::{
 use csv::WriterBuilder;
 use gpui::{
     AnyElement, App, Application, Bounds, ClipboardItem, Context, DragMoveEvent, Empty, Entity,
-    KeyBinding, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point, Render, ScrollHandle,
-    SharedString, TitlebarOptions, UniformListScrollHandle, Window, WindowBounds, WindowOptions,
-    actions, deferred, div, prelude::*, px, rgb, size, uniform_list,
+    Image, ImageFormat, KeyBinding, MouseButton, MouseDownEvent, MouseUpEvent, Pixels, Point,
+    Render, ScrollHandle, SharedString, TitlebarOptions, UniformListScrollHandle, Window,
+    WindowBounds, WindowOptions, actions, deferred, div, prelude::*, px, rgb, size, uniform_list,
 };
 use rfd::{FileDialog, MessageButtons, MessageDialog, MessageDialogResult, MessageLevel};
 use std::collections::{HashMap, HashSet};
@@ -23,6 +24,7 @@ use std::fs::{self, File};
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 const CLI_PREVIEW_ROWS: usize = 5;
@@ -46,8 +48,16 @@ const OPTIONS_PANEL_WIDTH: Pixels = px(540.0);
 const FILE_CARD_WIDTH: Pixels = px(260.0);
 const FILE_CARD_HEIGHT: Pixels = px(88.0);
 const TOAST_DURATION: Duration = Duration::from_secs(3);
+const APP_LOGO_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/resource/LevelDBCat_LOGO.png"
+));
 
 actions!(leveldbcat, [CopySelectedItem]);
+
+fn app_logo_image() -> Arc<Image> {
+    Arc::new(Image::from_bytes(ImageFormat::Png, APP_LOGO_BYTES.to_vec()))
+}
 
 pub(crate) use self::entry::run;
 

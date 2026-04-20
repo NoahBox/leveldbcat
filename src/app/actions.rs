@@ -25,6 +25,7 @@ impl LevelDbBrowserApp {
             entries_scroll: UniformListScrollHandle::new(),
             detail_text_view,
             search_input: search_input.clone(),
+            app_logo: app_logo_image(),
             toast: None,
             config,
             config_path,
@@ -281,6 +282,22 @@ impl LevelDbBrowserApp {
         self.persist_config();
     }
 
+    fn adjust_json_indent_spaces(&mut self, delta: i8, cx: &mut Context<Self>) {
+        let current = i16::from(self.config.json_indent_spaces);
+        let next = (current + i16::from(delta)).clamp(
+            i16::from(min_json_indent_spaces()),
+            i16::from(max_json_indent_spaces()),
+        ) as u8;
+
+        if next == self.config.json_indent_spaces {
+            return;
+        }
+
+        self.config.json_indent_spaces = next;
+        self.persist_config();
+        self.sync_detail_view(cx);
+    }
+
     fn set_monospace_font_family(
         &mut self,
         font_family: Option<String>,
@@ -473,7 +490,7 @@ impl LevelDbBrowserApp {
             .selected_detail
             .as_ref()
             .and_then(|detail| {
-                self.formatted_cell_text(detail.row, detail.column)
+                self.formatted_detail_text(detail.row, detail.column)
                     .map(|text| {
                         let mode = self.effective_mode(detail.row, detail.column);
                         let is_valid_json = self
@@ -642,6 +659,15 @@ impl LevelDbBrowserApp {
         ))
     }
 
+    fn formatted_detail_text(&self, row: usize, column: ParsedColumn) -> Option<String> {
+        let bytes = self.entry_bytes(row, column)?;
+        Some(format_bytes_with_mode_and_json_indent(
+            bytes,
+            self.effective_mode(row, column),
+            self.config.json_indent_spaces,
+        ))
+    }
+
     fn preview_cell_text(&self, row: usize, column: ParsedColumn) -> Option<String> {
         let text = self.formatted_cell_text(row, column)?;
         Some(single_line_preview(&text))
@@ -696,7 +722,7 @@ impl LevelDbBrowserApp {
             ParseMenuAction::Copy => {
                 let text = if menu.prefer_selected_detail_text {
                     self.selected_detail_text(cx)
-                        .or_else(|| self.copy_target_text(menu.target))
+                        .or_else(|| self.detail_target_text(menu.target))
                 } else {
                     self.copy_target_text(menu.target)
                 };
@@ -732,6 +758,13 @@ impl LevelDbBrowserApp {
         }
     }
 
+    fn detail_target_text(&self, target: ParseContextTarget) -> Option<String> {
+        match target {
+            ParseContextTarget::Cell { row, column } => self.formatted_detail_text(row, column),
+            ParseContextTarget::Header(_) => self.copy_target_text(target),
+        }
+    }
+
     fn selected_detail_text(&self, cx: &App) -> Option<String> {
         self.detail_text_view.read(cx).selected_text()
     }
@@ -742,7 +775,7 @@ impl LevelDbBrowserApp {
         };
 
         let text = self.selected_detail_text(cx).or_else(|| {
-            self.copy_target_text(ParseContextTarget::Cell {
+            self.detail_target_text(ParseContextTarget::Cell {
                 row: detail.row,
                 column: detail.column,
             })

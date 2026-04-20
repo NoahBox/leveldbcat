@@ -162,6 +162,41 @@ impl LevelDbBrowserApp {
                                 div()
                                     .w(px(180.0))
                                     .flex_none()
+                                    .child(i18n.text(TextKey::JsonIndent)),
+                            )
+                            .child(
+                                compact_button("-", palette)
+                                    .id("options-json-indent-decrease")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.adjust_json_indent_spaces(-1, cx);
+                                        cx.notify();
+                                    })),
+                            )
+                            .child(
+                                div()
+                                    .w(px(90.0))
+                                    .flex_none()
+                                    .text_center()
+                                    .child(i18n.json_indent_value(self.config.json_indent_spaces)),
+                            )
+                            .child(
+                                compact_button("+", palette)
+                                    .id("options-json-indent-increase")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.adjust_json_indent_spaces(1, cx);
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap_3()
+                            .child(
+                                div()
+                                    .w(px(180.0))
+                                    .flex_none()
                                     .child(i18n.text(TextKey::FontSize)),
                             )
                             .child(
@@ -526,7 +561,7 @@ impl LevelDbBrowserApp {
             .justify_center()
             .child(
                 div()
-                    .w(px(520.0))
+                    .w(px(640.0))
                     .max_w_full()
                     .bg(palette.surface_bg)
                     .border_1()
@@ -540,11 +575,29 @@ impl LevelDbBrowserApp {
                     .gap_4()
                     .child(div().text_lg().child(i18n.text(TextKey::About)))
                     .child(
-                        div().flex().flex_col().gap_1().children(
-                            i18n.about_text()
-                                .lines()
-                                .map(|line| div().child(line.to_owned()).into_any_element()),
-                        ),
+                        div()
+                            .flex()
+                            .gap_4()
+                            .items_start()
+                            .child(
+                                div()
+                                    .w(px(132.0))
+                                    .h(px(132.0))
+                                    .flex_none()
+                                    .rounded_md()
+                                    .overflow_hidden()
+                                    .border_1()
+                                    .border_color(palette.border)
+                                    .bg(palette.surface_alt_bg)
+                                    .child(gpui::img(self.app_logo.clone()).size_full()),
+                            )
+                            .child(
+                                div().flex_1().flex().flex_col().gap_1().children(
+                                    i18n.about_text()
+                                        .lines()
+                                        .map(|line| div().child(line.to_owned()).into_any_element()),
+                                ),
+                            ),
                     )
                     .child(
                         div().flex().justify_end().child(

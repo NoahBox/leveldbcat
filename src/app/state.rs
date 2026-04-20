@@ -11,6 +11,7 @@ struct LevelDbBrowserApp {
     entries_scroll: UniformListScrollHandle,
     detail_text_view: Entity<SelectableTextView>,
     search_input: Entity<TextInputView>,
+    app_logo: Arc<Image>,
     toast: Option<Toast>,
     config: AppConfig,
     config_path: PathBuf,
