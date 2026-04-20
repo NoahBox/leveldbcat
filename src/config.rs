@@ -31,6 +31,16 @@ pub struct AppConfig {
     pub font_size_px: f32,
     pub monospace_font_family: Option<String>,
     pub json_indent_spaces: u8,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sidebar_width_px: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub browser_height_px: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail_height_px: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_index_width_px: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result_key_width_px: Option<f32>,
     pub visual_mode: VisualMode,
     pub language: AppLanguage,
     pub last_workdir: Option<PathBuf>,
@@ -42,6 +52,11 @@ impl Default for AppConfig {
             font_size_px: DEFAULT_FONT_SIZE_PX,
             monospace_font_family: None,
             json_indent_spaces: DEFAULT_JSON_INDENT_SPACES,
+            sidebar_width_px: None,
+            browser_height_px: None,
+            detail_height_px: None,
+            result_index_width_px: None,
+            result_key_width_px: None,
             visual_mode: VisualMode::Light,
             language: detect_system_language(),
             last_workdir: None,
@@ -88,6 +103,11 @@ impl AppConfig {
         self.json_indent_spaces = self
             .json_indent_spaces
             .clamp(MIN_JSON_INDENT_SPACES, MAX_JSON_INDENT_SPACES);
+        self.sidebar_width_px = sanitize_optional_dimension(self.sidebar_width_px);
+        self.browser_height_px = sanitize_optional_dimension(self.browser_height_px);
+        self.detail_height_px = sanitize_optional_dimension(self.detail_height_px);
+        self.result_index_width_px = sanitize_optional_dimension(self.result_index_width_px);
+        self.result_key_width_px = sanitize_optional_dimension(self.result_key_width_px);
         self
     }
 }
@@ -116,6 +136,10 @@ pub fn max_json_indent_spaces() -> u8 {
     MAX_JSON_INDENT_SPACES
 }
 
+fn sanitize_optional_dimension(value: Option<f32>) -> Option<f32> {
+    value.filter(|value| value.is_finite() && *value > 0.0)
+}
+
 fn detect_system_language() -> AppLanguage {
     let Some(locale) = sys_locale::get_locale() else {
         return AppLanguage::English;
@@ -140,4 +164,45 @@ fn detect_system_language() -> AppLanguage {
     }
 
     AppLanguage::English
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppConfig;
+
+    #[test]
+    fn removes_invalid_saved_panel_sizes() {
+        let mut config = AppConfig::default();
+        config.sidebar_width_px = Some(-1.0);
+        config.browser_height_px = Some(0.0);
+        config.detail_height_px = Some(f32::INFINITY);
+        config.result_index_width_px = Some(f32::NAN);
+        config.result_key_width_px = Some(-42.0);
+
+        let sanitized = config.sanitized();
+
+        assert_eq!(sanitized.sidebar_width_px, None);
+        assert_eq!(sanitized.browser_height_px, None);
+        assert_eq!(sanitized.detail_height_px, None);
+        assert_eq!(sanitized.result_index_width_px, None);
+        assert_eq!(sanitized.result_key_width_px, None);
+    }
+
+    #[test]
+    fn keeps_valid_saved_panel_sizes() {
+        let mut config = AppConfig::default();
+        config.sidebar_width_px = Some(320.0);
+        config.browser_height_px = Some(220.0);
+        config.detail_height_px = Some(170.0);
+        config.result_index_width_px = Some(60.0);
+        config.result_key_width_px = Some(300.0);
+
+        let sanitized = config.sanitized();
+
+        assert_eq!(sanitized.sidebar_width_px, Some(320.0));
+        assert_eq!(sanitized.browser_height_px, Some(220.0));
+        assert_eq!(sanitized.detail_height_px, Some(170.0));
+        assert_eq!(sanitized.result_index_width_px, Some(60.0));
+        assert_eq!(sanitized.result_key_width_px, Some(300.0));
+    }
 }

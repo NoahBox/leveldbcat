@@ -11,6 +11,8 @@ impl LevelDbBrowserApp {
         let installed_monospace_fonts = installed_monospace_fonts();
         let detail_text_view = cx.new(SelectableTextView::new);
         let search_input = cx.new(|cx| TextInputView::new("", cx));
+        let layout = LayoutState::from_config(&config);
+        let result_columns = ResultColumnLayout::from_config(&config);
 
         let mut app = Self {
             roots,
@@ -34,9 +36,9 @@ impl LevelDbBrowserApp {
             font_dropdown_open: false,
             language_dropdown_open: false,
             about_open: false,
-            layout: LayoutState::default(),
+            layout,
             drag_state: None,
-            result_columns: ResultColumnLayout::default(),
+            result_columns,
             column_modes: ColumnModes::default(),
             cell_mode_overrides: HashMap::new(),
             context_menu: None,
@@ -234,7 +236,18 @@ impl LevelDbBrowserApp {
     }
 
     fn clear_splitter_drag(&mut self) {
-        self.drag_state = None;
+        if self.drag_state.take().is_some() {
+            self.persist_resized_layout();
+        }
+    }
+
+    fn persist_resized_layout(&mut self) {
+        self.config.sidebar_width_px = Some(f32::from(self.layout.sidebar_width));
+        self.config.browser_height_px = Some(f32::from(self.layout.browser_height));
+        self.config.detail_height_px = Some(f32::from(self.layout.detail_height));
+        self.config.result_index_width_px = Some(f32::from(self.result_columns.index_width));
+        self.config.result_key_width_px = Some(f32::from(self.result_columns.key_width));
+        self.persist_config();
     }
 
     fn apply_splitter_drag(&mut self, position: Point<Pixels>, viewport: gpui::Size<Pixels>) {

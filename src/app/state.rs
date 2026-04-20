@@ -169,12 +169,45 @@ impl Default for ResultColumnLayout {
     }
 }
 
+impl ResultColumnLayout {
+    fn from_config(config: &AppConfig) -> Self {
+        let default = Self::default();
+
+        Self {
+            index_width: config
+                .result_index_width_px
+                .map(px)
+                .unwrap_or(default.index_width),
+            key_width: config.result_key_width_px.map(px).unwrap_or(default.key_width),
+        }
+    }
+}
+
 impl Default for LayoutState {
     fn default() -> Self {
         Self {
             sidebar_width: INITIAL_SIDEBAR_WIDTH,
             browser_height: INITIAL_BROWSER_HEIGHT,
             detail_height: INITIAL_DETAIL_HEIGHT,
+        }
+    }
+}
+
+impl LayoutState {
+    fn from_config(config: &AppConfig) -> Self {
+        Self {
+            sidebar_width: config
+                .sidebar_width_px
+                .map(px)
+                .unwrap_or(INITIAL_SIDEBAR_WIDTH),
+            browser_height: config
+                .browser_height_px
+                .map(px)
+                .unwrap_or(INITIAL_BROWSER_HEIGHT),
+            detail_height: config
+                .detail_height_px
+                .map(px)
+                .unwrap_or(INITIAL_DETAIL_HEIGHT),
         }
     }
 }
